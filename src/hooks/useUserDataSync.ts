@@ -7,7 +7,7 @@ import { collection, onSnapshot } from 'firebase/firestore';
 const activeSubscriptions = new Map<string, Array<() => void>>();
 
 // Default collections to sync with Firestore - now under 'users/{uid}/' path
-const DEFAULT_COLLECTIONS = [
+export const DEFAULT_USER_COLLECTIONS = [
   'psirData',
   'vsirRecords',
   'inHouseIssueData',
@@ -49,7 +49,7 @@ export const useUserDataSync = (user: any) => {
 
     try {
       // Subscribe to each default collection in Firestore - now using 'users' path
-      DEFAULT_COLLECTIONS.forEach(collectionName => {
+      DEFAULT_USER_COLLECTIONS.forEach(collectionName => {
         try {
           const collRef = collection(db, 'users', uid, collectionName);
           
@@ -89,7 +89,7 @@ export const useUserDataSync = (user: any) => {
       subscriptionKeyRef.current = subscriptionKey;
 
       bus.dispatchEvent(new CustomEvent('userData.sync.started', { 
-        detail: { uid, collections: DEFAULT_COLLECTIONS.length, ts: Date.now() } 
+        detail: { uid, collections: DEFAULT_USER_COLLECTIONS.length, ts: Date.now() } 
       }));
 
     } catch (e) {

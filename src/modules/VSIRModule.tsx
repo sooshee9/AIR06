@@ -137,10 +137,18 @@ const VSIRModule: React.FC = () => {
   // Filter state
   const [showFilters, setShowFilters] = useState(false);
   const [filterText, setFilterText] = useState('');
+  const [showItemDropdown, setShowItemDropdown] = useState(false);
   const [filterVendor, setFilterVendor] = useState('');
   const [filterDateFrom, setFilterDateFrom] = useState('');
   const [filterDateTo, setFilterDateTo] = useState('');
   const activeFilterCount = [filterText, filterVendor, filterDateFrom, filterDateTo].filter(Boolean).length;
+
+  const itemSuggestions = useMemo(() => {
+    const names = Array.from(new Set((itemMaster || []).map(it => it.itemName).filter(Boolean)));
+    const query = form.itemName?.trim().toLowerCase() || '';
+    if (!query) return names.slice(0, 12);
+    return names.filter(n => n.toLowerCase().includes(query)).slice(0, 12);
+  }, [form.itemName, itemMaster]);
 
   // Refs for subscription cleanup and merge guards
   const unsubsRef = useRef<Array<() => void>>([]);
@@ -689,14 +697,24 @@ const VSIRModule: React.FC = () => {
               {/* Row 2: item fields */}
               <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', marginBottom: 16, alignItems: 'flex-end' }}>
                 <Field label="Item Name">
-                  {itemMaster.length > 0 ? (
-                    <select name="itemName" className="vs-input" style={{ ...S.input, minWidth: 220 }} value={form.itemName} onChange={handleChange}>
-                      <option value="">Select item…</option>
-                      {[...new Set(itemMaster.map(i => i.itemName))].map(n => <option key={n} value={n}>{n}</option>)}
-                    </select>
-                  ) : (
-                    <input name="itemName" className="vs-input" style={{ ...S.input, minWidth: 200 }} placeholder="Item Name" value={form.itemName} onChange={handleChange} />
-                  )}
+                  <div style={{ position: 'relative', minWidth: 220 }}>
+                    <input name="itemName" className="vs-input" style={{ ...S.input, width: '100%' }} placeholder="Select item…" value={form.itemName}
+                      onChange={e => { handleChange(e); setShowItemDropdown(true); }}
+                      onFocus={() => setShowItemDropdown(true)}
+                      onBlur={() => setTimeout(() => setShowItemDropdown(false), 160)}
+                    />
+
+                    {showItemDropdown && itemSuggestions.length > 0 && (
+                      <div style={{ position: 'absolute', top: 'calc(100% + 8px)', left: 0, right: 0, background: '#fff', border: `1px solid ${S.border}`, borderRadius: 8, boxShadow: '0 6px 18px rgba(16,24,40,0.08)', zIndex: 80, maxHeight: 220, overflowY: 'auto' }}>
+                        {itemSuggestions.map((name, idx) => (
+                          <div key={name + idx} onMouseDown={(ev) => { ev.preventDefault(); setForm(prev => ({ ...prev, itemName: name, itemCode: (itemMaster.find(it => it.itemName === name) || { itemCode: '' }).itemCode })); setShowItemDropdown(false); }}
+                            style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: idx < itemSuggestions.length - 1 ? `1px solid ${S.border}` : 'none' }}>
+                            {name}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </Field>
                 <Field label="Item Code">
                   <input className="vs-input" style={{ ...S.inputDisabled, width: 130 }} value={form.itemCode} readOnly placeholder="Auto-filled" />
@@ -752,7 +770,31 @@ const VSIRModule: React.FC = () => {
                   {filteredRecords.length} of {records.length} rows
                 </span>
               </div>
-              <div style={{ display: 'flex', gap: 8 }}>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <div style={{ position: 'relative', minWidth: 220, maxWidth: 420 }}>
+                  <input className="vs-input" style={{ ...S.input, width: '100%', paddingRight: 30, borderRadius: 20 }}
+                    placeholder="Search by name, code, batch..."
+                    value={filterText}
+                    onChange={e => setFilterText(e.target.value)}
+                    onFocus={() => setShowItemDropdown(true)}
+                    onBlur={() => setTimeout(() => setShowItemDropdown(false), 160)}
+                  />
+                  <span style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', color: '#6B7280', fontSize: 12, cursor: filterText ? 'pointer' : 'default', userSelect: 'none' }}
+                    onMouseDown={e => { if (filterText) { e.preventDefault(); setFilterText(''); } }}>
+                    {filterText ? '✕' : '🔍'}
+                  </span>
+
+                  {showItemDropdown && itemSuggestions.length > 0 && (
+                    <div style={{ position: 'absolute', top: 'calc(100% + 8px)', left: 0, right: 0, background: '#fff', border: `1px solid ${S.border}`, borderRadius: 8, boxShadow: '0 6px 18px rgba(16,24,40,0.08)', zIndex: 60, maxHeight: 220, overflowY: 'auto' }}>
+                      {itemSuggestions.map((name, idx) => (
+                        <div key={name + idx} onMouseDown={(e) => { e.preventDefault(); setFilterText(name); setShowItemDropdown(false); }}
+                          style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: idx < itemSuggestions.length - 1 ? `1px solid ${S.border}` : 'none' }}>
+                          {name}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
                 <button className="vs-btn vs-ghost" style={{ ...S.btnGhost, borderColor: showFilters ? S.accent : S.border, color: showFilters ? S.accent : S.textSecondary, position: 'relative' }} onClick={() => setShowFilters(f => !f)}>
                   ⚙ Filters
                   {activeFilterCount > 0 && <span style={{ position: 'absolute', top: -6, right: -6, background: S.accent, color: '#fff', borderRadius: '50%', width: 16, height: 16, fontSize: 10, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{activeFilterCount}</span>}

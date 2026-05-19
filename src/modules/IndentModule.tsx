@@ -295,6 +295,13 @@ const IndentModule: React.FC<IndentModuleProps> = ({ user }) => {
   const [newIndent, setNewIndent] = useState<Indent>({ indentNo: '', date: '', indentBy: '', oaNo: '', items: [] });
   const [itemInput, setItemInput] = useState<IndentItem>({ model: '', itemCode: '', qty: 0, indentClosed: false });
   const [editIdx, setEditIdx] = useState<number | null>(null);
+  const [showItemDropdown, setShowItemDropdown] = useState(false);
+  const itemSuggestions = useMemo(() => {
+    const names = Array.from(new Set(itemMaster.map(i => i.itemName).filter(Boolean)));
+    const query = itemInput.model?.trim().toLowerCase() || '';
+    if (!query) return names.slice(0, 12);
+    return names.filter(name => name.toLowerCase().includes(query)).slice(0, 12);
+  }, [itemInput.model, itemMaster]);
 
   const unsubRefs = useRef<Array<() => void>>([]);
 
@@ -514,12 +521,10 @@ const IndentModule: React.FC<IndentModuleProps> = ({ user }) => {
   }, [indents]);
 
   // ─── Handlers ─────────────────────────────────────────────────────────────
-  const handleChange = useCallback((e: React.ChangeEvent<HTMLSelectElement | HTMLInputElement>) => {
-    const { name, value } = e.target;
-    if (name === 'itemName') {
-      const found = itemMaster.find(i => i.itemName === value);
-      setItemInput(prev => ({ ...prev, model: value, itemCode: found ? found.itemCode : '' }));
-    }
+  const handleChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const { value } = e.target;
+    const found = itemMaster.find(i => i.itemName === value);
+    setItemInput(prev => ({ ...prev, model: value, itemCode: found ? found.itemCode : '' }));
   }, [itemMaster]);
 
   const handleAddItem = useCallback(() => {
@@ -745,14 +750,36 @@ const IndentModule: React.FC<IndentModuleProps> = ({ user }) => {
 
             <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', alignItems: 'flex-end' }}>
               <Field label="Item Name">
-                <select name="itemName" className="im-input"
-                  style={{ ...S.input, minWidth: 260, borderColor: itemMaster.length === 0 ? S.warning : S.borderStrong }}
-                  value={itemInput.model} onChange={handleChange}>
-                  <option value="">{itemMaster.length === 0 ? 'Loading item master…' : 'Select item…'}</option>
-                  {itemMaster.map(item => (
-                    <option key={item.itemCode} value={item.itemName}>{item.itemName} — {item.itemCode}</option>
-                  ))}
-                </select>
+                <div style={{ position: 'relative', minWidth: 260 }}>
+                  <input
+                    name="itemName"
+                    className="im-input"
+                    style={{ ...S.input, width: '100%', borderColor: itemMaster.length === 0 ? S.warning : S.borderStrong }}
+                    placeholder={itemMaster.length === 0 ? 'Loading item master…' : 'Search item name…'}
+                    value={itemInput.model}
+                    onChange={e => {
+                      handleChange(e);
+                      setShowItemDropdown(true);
+                    }}
+                    onFocus={() => setShowItemDropdown(true)}
+                    onBlur={() => setTimeout(() => setShowItemDropdown(false), 160)}
+                  />
+                  {showItemDropdown && itemSuggestions.length > 0 && (
+                    <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, right: 0, background: '#fff', border: `1px solid ${S.border}`, borderRadius: 10, boxShadow: '0 6px 18px rgba(16,24,40,0.08)', zIndex: 90, maxHeight: 240, overflowY: 'auto' }}>
+                      {itemSuggestions.map((name, idx) => (
+                        <div key={`${name}-${idx}`} style={{ padding: '10px 12px', cursor: 'pointer', borderBottom: idx < itemSuggestions.length - 1 ? `1px solid ${S.border}` : 'none' }}
+                          onMouseDown={ev => {
+                            ev.preventDefault();
+                            const found = itemMaster.find(i => i.itemName === name);
+                            setItemInput(prev => ({ ...prev, model: name, itemCode: found ? found.itemCode : '' }));
+                            setShowItemDropdown(false);
+                          }}>
+                          {name}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </Field>
               <Field label="Item Code">
                 <input className="im-input" style={{ ...S.inputDisabled, width: 140 }} value={itemInput.itemCode} readOnly placeholder="Auto-filled" />
@@ -858,13 +885,14 @@ const IndentModule: React.FC<IndentModuleProps> = ({ user }) => {
           {/* Indent Records Table */}
           <div style={S.card}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
                 <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: S.textPrimary }}>Indent Records</h2>
                 <span style={{ fontSize: 12, fontWeight: 600, color: S.textSecondary, background: S.bg, padding: '2px 10px', borderRadius: 20, border: `1px solid ${S.border}` }}>
                   {filteredRows.length} of {indentAnalysisRows.length} rows
                 </span>
               </div>
-              <div style={{ display: 'flex', gap: 8 }}>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                <input className="im-input" style={{ ...S.input, minWidth: 220 }} placeholder="Search item, code, indent no…" value={filterText} onChange={e => setFilterText(e.target.value)} />
                 <button className="im-btn im-ghost"
                   style={{ ...S.btnGhost, borderColor: showFilters ? S.accent : S.border, color: showFilters ? S.accent : S.textSecondary, position: 'relative' }}
                   onClick={() => setShowFilters(f => !f)}>

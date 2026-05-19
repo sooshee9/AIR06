@@ -543,29 +543,52 @@ const PurchaseModule: React.FC<PurchaseModuleProps> = ({ user }) => {
     <div style={S.root}>
 
       {/* Top row */}
-      <div style={S.topRow}>
-        <h2 style={S.title}>Purchase Orders</h2>
-        <div style={S.topBtns}>
-          <button
-            onClick={() => setShowFilters(p => !p)}
-            style={{ ...S.btnOutline, position: 'relative' as const }}
-          >
-            {showFilters ? '✕ Filters' : '⊟ Filters'}
-            {activeFilterCount > 0 && (
-              <span style={{ position: 'absolute', top: -6, right: -6, background: '#2563eb', color: '#fff', borderRadius: '50%', width: 16, height: 16, fontSize: 10, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                {activeFilterCount}
-              </span>
-            )}
-          </button>
-          <button onClick={exportToExcel} style={S.btnOutline} title="Export visible rows to Excel/CSV">
-            ↓ Export
-          </button>
-          <button onClick={handleImportIndents} disabled={importing} style={{ ...S.btnOutline, ...(importing ? { opacity: 0.6, cursor: 'not-allowed' } : {}) }}>
-            {importing ? 'Syncing…' : '↓ Sync from Indents'}
-          </button>
-          <button onClick={() => { setShowAddForm(p => !p); setEditIndex(null); setEditEntry(null); }} style={S.btnPrimary}>
-            {showAddForm ? '✕ Cancel' : '+ Add Entry'}
-          </button>
+      <div style={{ ...S.topRow, flexDirection: 'column', alignItems: 'stretch', gap: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+          <h2 style={S.title}>Purchase Orders</h2>
+          <div style={S.topBtns}>
+            <button
+              onClick={() => setShowFilters(p => !p)}
+              style={{ ...S.btnOutline, position: 'relative' as const }}
+            >
+              {showFilters ? '✕ Filters' : '⊟ Filters'}
+              {activeFilterCount > 0 && (
+                <span style={{ position: 'absolute', top: -6, right: -6, background: '#2563eb', color: '#fff', borderRadius: '50%', width: 16, height: 16, fontSize: 10, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  {activeFilterCount}
+                </span>
+              )}
+            </button>
+            <button onClick={exportToExcel} style={S.btnOutline} title="Export visible rows to Excel/CSV">
+              ↓ Export
+            </button>
+            <button onClick={handleImportIndents} disabled={importing} style={{ ...S.btnOutline, ...(importing ? { opacity: 0.6, cursor: 'not-allowed' } : {}) }}>
+              {importing ? 'Syncing…' : '↓ Sync from Indents'}
+            </button>
+            <button onClick={() => { setShowAddForm(p => !p); setEditIndex(null); setEditEntry(null); }} style={S.btnPrimary}>
+              {showAddForm ? '✕ Cancel' : '+ Add Entry'}
+            </button>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 12, justifyContent: 'space-between' }}>
+          <div style={{ position: 'relative', minWidth: 240, flex: '1 1 320px', maxWidth: 520 }}>
+            <input
+              placeholder="Search item, PO, supplier, OA…"
+              value={filterText}
+              onChange={e => setFilterText(e.target.value)}
+              style={{ ...S.input, width: '100%', paddingRight: 30, background: '#fff' }}
+            />
+            <span style={{
+              position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)',
+              color: '#6b7280', fontSize: 12, cursor: filterText ? 'pointer' : 'default', userSelect: 'none',
+            }} onMouseDown={e => { if (filterText) { e.preventDefault(); setFilterText(''); } }}>
+              {filterText ? '✕' : '🔍'}
+            </span>
+          </div>
+
+          <div style={{ fontSize: 12, color: '#6b7280' }}>
+            {filteredEntries.length} of {entries.length} rows
+          </div>
         </div>
       </div>
 

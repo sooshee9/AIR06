@@ -313,6 +313,14 @@ const PSIRModule: React.FC = () => {
   const [itemInput, setItemInput] = useState<PSIRItem>({
     itemName: '', itemCode: '', qtyReceived: 0, okQty: 0, rejectQty: 0, grnNo: '', remarks: '',
   });
+  const [showItemDropdown, setShowItemDropdown] = useState(false);
+
+  const itemSuggestions = useMemo(() => {
+    const names = Array.from(new Set(itemMaster.map(i => i.itemName).filter(Boolean)));
+    const query = itemInput.itemName?.trim().toLowerCase() || '';
+    if (!query) return names.slice(0, 12);
+    return names.filter(n => n.toLowerCase().includes(query)).slice(0, 12);
+  }, [itemInput.itemName, itemMaster]);
 
   const unsubRef = useRef<(() => void) | null>(null);
   const psirRepairRef = useRef(false);
@@ -636,6 +644,10 @@ const PSIRModule: React.FC = () => {
     setItemInput(prev => ({ ...prev, [name]: newValue }));
   }, []);
 
+  const setItemName = useCallback((itemName: string) => {
+    setItemInput(prev => ({ ...prev, itemName }));
+  }, []);
+
   const validateItemQty = (input: PSIRItem): boolean => {
     let qty = Number(input.qtyReceived) || 0;
     const ok = Number(input.okQty) || 0;
@@ -902,13 +914,29 @@ const PSIRModule: React.FC = () => {
             <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: 16 }}>
               <Field label="Item Name">
                 {itemMaster.length > 0 ? (
-                  <select name="itemName" className="ps-input" style={{ ...S.input, minWidth: 220 }}
-                    value={itemInput.itemName} onChange={handleItemInputChange}>
-                    <option value="">Select item…</option>
-                    {[...new Set(itemMaster.map(i => i.itemName))].map(name => (
-                      <option key={name} value={name}>{name}</option>
-                    ))}
-                  </select>
+                  <div style={{ position: 'relative', minWidth: 220 }}>
+                    <input name="itemName" className="ps-input" style={{ ...S.input, width: '100%' }}
+                      placeholder="Select item…"
+                      value={itemInput.itemName}
+                      onChange={e => { handleItemInputChange(e); setShowItemDropdown(true); }}
+                      onFocus={() => setShowItemDropdown(true)}
+                      onBlur={() => setTimeout(() => setShowItemDropdown(false), 160)}
+                    />
+                    {showItemDropdown && itemSuggestions.length > 0 && (
+                      <div style={{ position: 'absolute', top: 'calc(100% + 8px)', left: 0, right: 0, background: '#fff', border: `1px solid ${S.border}`, borderRadius: 8, boxShadow: '0 6px 18px rgba(16,24,40,0.08)', zIndex: 90, maxHeight: 220, overflowY: 'auto' }}>
+                        {itemSuggestions.map((name, idx) => (
+                          <div key={`${name}-${idx}`} style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: idx < itemSuggestions.length - 1 ? `1px solid ${S.border}` : 'none' }}
+                            onMouseDown={(ev) => {
+                              ev.preventDefault();
+                              setItemName(name);
+                              setShowItemDropdown(false);
+                            }}>
+                            {name}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 ) : (
                   <input name="itemName" className="ps-input" style={{ ...S.input, minWidth: 200 }}
                     placeholder="Item Name" value={itemInput.itemName} onChange={handleItemInputChange} />

@@ -1,4 +1,4 @@
-import { collection, addDoc, getDocs, updateDoc, deleteDoc, doc, onSnapshot } from 'firebase/firestore';
+import { collection, addDoc, getDocs, updateDoc, deleteDoc, doc, onSnapshot, setDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { logger } from './logger';
 
@@ -167,6 +167,39 @@ export const replaceFirestoreCollection = async (uid: string, collectionName: st
   } catch (error) {
     logger.error(`[Firestore] Error replacing ${collectionName}:`, error);
     console.error(`[Firestore] Error replacing 'users/${uid}/${collectionName}':`, error);
+    throw error;
+  }
+};
+
+/**
+ * Restore a Firestore collection from backup data, preserving document IDs when available.
+ * @param uid User ID
+ * @param collectionName Collection name
+ * @param docs Array of documents to restore
+ */
+export const restoreFirestoreCollection = async (uid: string, collectionName: string, docs: any[]): Promise<void> => {
+  try {
+    const collRef = collection(db, 'users', uid, collectionName);
+    const snapshot = await getDocs(collRef);
+    const deletePromises = snapshot.docs.map(d => deleteDoc(d.ref));
+    await Promise.all(deletePromises);
+
+    const addPromises = docs.map((item: any) => {
+      const { id, ...payload } = item || {};
+      const targetDoc = id ? doc(db, 'users', uid, collectionName, id) : undefined;
+      const normalizedPayload = {
+        ...payload,
+        updatedAt: new Date().toISOString(),
+        createdAt: payload.createdAt || new Date().toISOString(),
+      };
+      return targetDoc ? setDoc(targetDoc, normalizedPayload) : addDoc(collRef, normalizedPayload);
+    });
+    await Promise.all(addPromises);
+    logger.log(`[Firestore] Restored ${collectionName} from backup with ${docs.length} documents`);
+    console.debug(`[Firestore] Restored 'users/${uid}/${collectionName}': ${docs.length} documents`);
+  } catch (error) {
+    logger.error(`[Firestore] Error restoring ${collectionName}:`, error);
+    console.error(`[Firestore] Error restoring 'users/${uid}/${collectionName}':`, error);
     throw error;
   }
 };

@@ -710,10 +710,21 @@ const VendorDeptModule: React.FC = () => {
             <p style={{ margin: '2px 0 0', fontSize: 12.5, color: '#9ca3af', fontWeight: 500 }}>Purchase order tracking &amp; vendor management</p>
           </div>
 
-          {/* Unified toolbar — filters + row count + sync + export all in one bar */}
+          {/* Unified toolbar — search + filters + row count + sync + export */}
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8 }}>
-            <div className="vdm-toolbar">
-              {/* Filter toggle btn with badge */}
+            <div className="vdm-toolbar" style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 12, justifyContent: 'flex-end' }}>
+              <div style={{ position: 'relative', minWidth: 240, flex: '1 1 320px', maxWidth: 460 }}>
+                <input className="vdm-input" style={{ width: '100%', paddingRight: 30 }}
+                  placeholder="Search orders, item, PO, vendor, batch…"
+                  value={fSearch}
+                  onChange={e => setFSearch(e.target.value)} />
+                <span style={{
+                  position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)',
+                  color: '#6b7280', fontSize: 12, cursor: fSearch ? 'pointer' : 'default', userSelect: 'none',
+                }} onMouseDown={e => { if (fSearch) { e.preventDefault(); setFSearch(''); } }}>
+                  {fSearch ? '✕' : '🔍'}
+                </span>
+              </div>
               <button
                 className={`vdm-btn vdm-btn-sm ${activeFilters > 0 ? 'vdm-btn-indigo' : 'vdm-btn-ghost'}`}
                 style={{ position: 'relative' }}
@@ -727,6 +738,11 @@ const VendorDeptModule: React.FC = () => {
               </button>
 
               <div className="vdm-divider-sm" />
+
+              {/* Row count pill */}
+              <span className="vdm-rowcount">
+                {filtered.length === flatRows.length ? `${flatRows.length} rows` : `${filtered.length} / ${flatRows.length} rows`}
+              </span>
 
               {/* Row count pill */}
               <span className="vdm-rowcount">
@@ -982,11 +998,23 @@ const VendorDeptModule: React.FC = () => {
 
         {/* ── Orders table ──────────────────────────────────────────────── */}
         <div className="vdm-card">
-          <div style={{ padding: '13px 20px', borderBottom: '1px solid #f0f1f5', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ padding: '13px 20px', borderBottom: '1px solid #f0f1f5', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
             <span style={{ fontWeight: 700, fontSize: 14, color: '#1a237e' }}>Orders</span>
-            <span style={{ fontSize: 12, color: '#9ca3af' }}>
-              {activeFilters > 0 ? `Filtered: ${filtered.length} of ${flatRows.length}` : `${flatRows.length} total rows`}
-            </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div style={{ position: 'relative', minWidth: 240, maxWidth: 420 }}>
+                <input className="vdm-input" style={{ width: '100%', paddingRight: 30, borderRadius: 20 }}
+                  placeholder="Search by name, code, PO, batch..."
+                  value={fSearch}
+                  onChange={e => setFSearch(e.target.value)} />
+                <span style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', color: '#6b7280', fontSize: 12, cursor: fSearch ? 'pointer' : 'default', userSelect: 'none' }}
+                  onMouseDown={e => { if (fSearch) { e.preventDefault(); setFSearch(''); } }}>
+                  {fSearch ? '✕' : '🔍'}
+                </span>
+              </div>
+              <span style={{ fontSize: 12, color: '#9ca3af', whiteSpace: 'nowrap' }}>
+                {activeFilters > 0 ? `Filtered: ${filtered.length} of ${flatRows.length}` : `${flatRows.length} total rows`}
+              </span>
+            </div>
           </div>
           <div style={{ overflowX: 'auto' }}>
             <table className="vdm-table">

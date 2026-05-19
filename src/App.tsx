@@ -1,4 +1,6 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
+import type { ChangeEvent } from 'react';
+import * as XLSX from 'xlsx';
 
 import LoginPage from './LoginPage';
 import SyncStatus from './components/SyncStatus';
@@ -15,8 +17,9 @@ import StockModule from './modules/StockModule';
 import ItemMasterModule from './modules/ItemMasterModule';
 
 import { useUserRole } from './hooks/useUserRole';
-import { useUserDataSync } from './hooks/useUserDataSync';
+import { useUserDataSync, DEFAULT_USER_COLLECTIONS } from './hooks/useUserDataSync';
 import { hardResetAllData, verifyDataCleared, forceCleanupAllData } from './utils/firestoreServices';
+import { getFirestoreDocs, restoreFirestoreCollection } from './utils/firestoreSync';
 
 import './App.css';
 
@@ -68,6 +71,11 @@ async function handleHardReset(uid: string) {
 function App() {
   const [activeModule, setActiveModule] = useState<ModuleKey>('purchase');
   const [user, setUser] = useState<any>(null);
+  const [backupLoading, setBackupLoading] = useState(false);
+  const restoreInputRef = useRef<HTMLInputElement | null>(null);
+  const [exportPanelOpen, setExportPanelOpen] = useState(false);
+  const [selectedCollections, setSelectedCollections] = useState<string[]>(DEFAULT_USER_COLLECTIONS.slice());
+  const [exportFormat, setExportFormat] = useState<'json'|'xlsx'>('json');
 
   useUserRole(user);
   useUserDataSync(user);
@@ -89,6 +97,131 @@ function App() {
   };
 
   const activeLabel = NAV_ITEMS.find(n => n.key === activeModule)?.label ?? '';
+
+  const triggerRestoreInput = () => {
+    restoreInputRef.current?.click();
+  };
+
+  const toggleCollection = (name: string) => {
+    setSelectedCollections(prev => prev.includes(name) ? prev.filter(c => c !== name) : [...prev, name]);
+  };
+
+  
+  const handleBackupExport = async () => {
+    // open selection UI
+    setExportPanelOpen(true);
+  };
+
+  const performExport = async (collections: string[], format: 'json'|'xlsx') => {
+    if (!user?.uid) return;
+    setBackupLoading(true);
+    try {
+      const payload: any = {
+        meta: {
+          version: 1,
+          uid: user.uid,
+          createdAt: new Date().toISOString(),
+          collections: collections.slice(),
+          format,
+        },
+        data: {},
+      };
+
+      for (const collectionName of collections) {
+        payload.data[collectionName] = await getFirestoreDocs(user.uid, collectionName);
+      }
+
+      if (format === 'json') {
+        const text = JSON.stringify(payload, null, 2);
+        const blob = new Blob([text], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const el = document.createElement('a');
+        el.href = url;
+        el.download = `airtech-backup-${user.uid}-${new Date().toISOString().slice(0,10)}.json`;
+        document.body.appendChild(el);
+        el.click();
+        document.body.removeChild(el);
+        URL.revokeObjectURL(url);
+      } else {
+        const wb = XLSX.utils.book_new();
+        for (const collectionName of collections) {
+          const rows = payload.data[collectionName] || [];
+          const ws = XLSX.utils.json_to_sheet(rows);
+          XLSX.utils.book_append_sheet(wb, ws, collectionName.substring(0,31));
+        }
+        const filename = `airtech-backup-${user.uid}-${new Date().toISOString().slice(0,10)}.xlsx`;
+        XLSX.writeFile(wb, filename);
+      }
+
+      alert('✅ Backup exported successfully. Save this file in a secure location.');
+    } catch (err) {
+      console.error('[App] Backup export failed:', err);
+      alert(`❌ Backup export failed:\n${String(err)}`);
+    } finally {
+      setBackupLoading(false);
+      setExportPanelOpen(false);
+    }
+  };
+
+  const handleBackupRestore = async (file: File) => {
+    if (!user?.uid) return;
+    if (!window.confirm('Restore from backup will overwrite your current data for the backed up collections. Continue?')) {
+      return;
+    }
+    setBackupLoading(true);
+    try {
+      const name = file.name.toLowerCase();
+      let payload: any = null;
+      if (name.endsWith('.json')) {
+        const text = await file.text();
+        payload = JSON.parse(text);
+      } else {
+        const arrayBuffer = await file.arrayBuffer();
+        const wb = XLSX.read(arrayBuffer, { type: 'array' });
+        const data: any = {};
+        wb.SheetNames.forEach(sn => {
+          const sheet = wb.Sheets[sn];
+          const rows = XLSX.utils.sheet_to_json(sheet, { defval: null });
+          data[sn] = rows;
+        });
+        payload = { meta: { format: 'xlsx' }, data };
+      }
+      const collections = payload?.data && typeof payload.data === 'object'
+        ? Object.keys(payload.data)
+        : [];
+      if (!collections.length) {
+        throw new Error('Backup file does not contain valid collection data.');
+      }
+
+      const choice = window.prompt(`Collections found: ${collections.join(', ')}\nEnter comma-separated collections to restore, or 'all' to restore all:`, 'all');
+      const toRestore = (choice && choice.trim().toLowerCase() === 'all')
+        ? collections
+        : (choice ? choice.split(',').map(s => s.trim()).filter(Boolean) : []);
+      if (!toRestore.length) {
+        throw new Error('No collections selected for restore.');
+      }
+      for (const collectionName of toRestore) {
+        if (!collections.includes(collectionName)) continue;
+        const docs = Array.isArray(payload.data[collectionName]) ? payload.data[collectionName] : [];
+        await restoreFirestoreCollection(user.uid, collectionName, docs);
+      }
+      alert('✅ Backup restored successfully. Reloading to refresh local state.');
+      window.location.reload();
+    } catch (err) {
+      console.error('[App] Backup restore failed:', err);
+      alert(`❌ Backup restore failed:\n${String(err)}`);
+    } finally {
+      setBackupLoading(false);
+    }
+  };
+
+  const handleRestoreInputChange = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      await handleBackupRestore(file);
+    }
+    event.target.value = '';
+  };
 
   return (
     <>
@@ -325,6 +458,47 @@ function App() {
               <div className="erp-user-dot"></div>
               <span className="erp-user-email">{user.email}</span>
             </div>
+            <button
+              className="erp-hbtn erp-hbtn-backup"
+              onClick={handleBackupExport}
+              disabled={backupLoading}
+            >
+              📦 Backup
+            </button>
+            {exportPanelOpen && (
+              <div style={{ position: 'absolute', right: 180, top: 68, background: '#fff', padding: 12, borderRadius: 8, boxShadow: '0 6px 18px rgba(0,0,0,0.12)', zIndex: 400, maxWidth: 420 }}>
+                <div style={{ fontWeight: 600, marginBottom: 8 }}>Export Options</div>
+                <div style={{ maxHeight: 220, overflowY: 'auto', marginBottom: 8 }}>
+                  {DEFAULT_USER_COLLECTIONS.map(c => (
+                    <label key={c} style={{ display: 'block', fontSize: 13 }}>
+                      <input type="checkbox" checked={selectedCollections.includes(c)} onChange={() => toggleCollection(c)} /> {c}
+                    </label>
+                  ))}
+                </div>
+                <div style={{ marginBottom: 8 }}>
+                  <label style={{ marginRight: 8 }}><input type="radio" name="expfmt" checked={exportFormat === 'json'} onChange={() => setExportFormat('json')} /> JSON</label>
+                  <label><input type="radio" name="expfmt" checked={exportFormat === 'xlsx'} onChange={() => setExportFormat('xlsx')} /> Excel</label>
+                </div>
+                <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                  <button className="erp-hbtn" onClick={() => { performExport(selectedCollections, exportFormat); }}>Export</button>
+                  <button className="erp-hbtn" onClick={() => setExportPanelOpen(false)}>Cancel</button>
+                </div>
+              </div>
+            )}
+            <button
+              className="erp-hbtn erp-hbtn-backup"
+              onClick={triggerRestoreInput}
+              disabled={backupLoading}
+            >
+              ⬆ Restore
+            </button>
+            <input
+              ref={restoreInputRef}
+              type="file"
+              accept="application/json,.json,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,.xlsx,application/vnd.ms-excel,.xls"
+              style={{ display: 'none' }}
+              onChange={handleRestoreInputChange}
+            />
             <button className="erp-hbtn erp-hbtn-reset" onClick={() => handleHardReset(user.uid)}>
               ⚠ Reset
             </button>

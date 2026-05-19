@@ -280,11 +280,23 @@ const InHouseIssueModule: React.FC = () => {
   const [vsirData, setVsirData] = useState<any[]>([]);
   const [itemMaster, setItemMaster] = useState<{ itemName: string; itemCode: string }[]>([]);
   const [itemNames, setItemNames] = useState<string[]>([]);
+  const [showItemDropdown, setShowItemDropdown] = useState(false);
 
   const [newIssue, setNewIssue] = useState<InHouseIssue>(() => blankIssue([]));
   const [itemInput, setItemInput] = useState<InHouseIssueItem>({ ...BLANK_ITEM });
   const [editIssueIdx, setEditIssueIdx] = useState<number | null>(null);
   const [editItemIdx, setEditItemIdx] = useState<number | null>(null);
+
+  const filteredItemOptions = useMemo(() => {
+    if (!itemMaster.length) return [];
+    const query = String(itemInput.itemName || '').trim().toLowerCase();
+    const options = itemMaster.filter(it => {
+      const name = String(it.itemName || '').toLowerCase();
+      const code = String(it.itemCode || '').toLowerCase();
+      return !query || name.includes(query) || code.includes(query);
+    });
+    return options.slice(0, 30);
+  }, [itemInput.itemName, itemMaster]);
 
   // Filter state
   const [filterOpen, setFilterOpen] = useState(false);
@@ -609,9 +621,18 @@ const InHouseIssueModule: React.FC = () => {
         {filterOpen && (
           <div className="ihm-fpanel" style={{ marginBottom: 16 }}>
             <Field label="Search">
-              <input className="ihm-input" style={{ minWidth: 210 }} autoFocus
-                placeholder="Req No, PO, item, batch…"
-                value={fSearch} onChange={e => setFSearch(e.target.value)} />
+              <div style={{ position: 'relative', minWidth: 210 }}>
+                <input className="ihm-input" style={{ width: '100%', paddingRight: 30 }} autoFocus
+                  placeholder="Req No, PO, item, batch…"
+                  value={fSearch} onChange={e => setFSearch(e.target.value)} />
+                <span style={{
+                  position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)',
+                  color: '#6b7280', fontSize: 12, cursor: fSearch ? 'pointer' : 'default',
+                  userSelect: 'none',
+                }} onMouseDown={e => { if (fSearch) { e.preventDefault(); setFSearch(''); } }}>
+                  {fSearch ? '✕' : '🔍'}
+                </span>
+              </div>
             </Field>
             <Field label="Tx Type">
               <select className="ihm-input ihm-select" style={{ minWidth: 120 }} value={fTxType} onChange={e => setFTxType(e.target.value)}>
@@ -713,15 +734,59 @@ const InHouseIssueModule: React.FC = () => {
               <div style={{ display: 'grid', gridTemplateColumns: '2.5fr 1fr 1fr 1fr', gap: 12, marginBottom: 12 }}>
                 <Field label="Item Name">
                   {itemNames.length > 0 ? (
-                    <select className="ihm-input ihm-select" value={itemInput.itemName}
-                      onChange={e => {
-                        const v = e.target.value;
-                        const found = itemMaster.find(it => it.itemName === v);
-                        setItemInput(p => ({ ...p, itemName: v, itemCode: found?.itemCode || '', batchNo: '' }));
+                    <div style={{ position: 'relative' }}>
+                      <input className="ihm-input" style={{ paddingRight: 30 }}
+                        placeholder="Search item name or code…"
+                        value={itemInput.itemName}
+                        autoComplete="off"
+                        onChange={e => {
+                          const value = e.target.value;
+                          const found = itemMaster.find(it => it.itemName === value || it.itemCode === value);
+                          setItemInput(p => ({ ...p, itemName: value, itemCode: found?.itemCode || p.itemCode, batchNo: '' }));
+                          setShowItemDropdown(true);
+                        }}
+                        onFocus={() => setShowItemDropdown(true)}
+                        onBlur={() => setTimeout(() => setShowItemDropdown(false), 170)}
+                      />
+                      <span style={{
+                        position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)',
+                        color: '#6b7280', fontSize: 12, cursor: itemInput.itemName ? 'pointer' : 'default',
+                        userSelect: 'none',
+                      }} onMouseDown={e => {
+                        if (!itemInput.itemName) return;
+                        e.preventDefault();
+                        setItemInput(p => ({ ...p, itemName: '', itemCode: '', batchNo: '' }));
+                        setShowItemDropdown(true);
                       }}>
-                      <option value="">— Select Item —</option>
-                      {itemNames.map(n => <option key={n} value={n}>{n}</option>)}
-                    </select>
+                        {itemInput.itemName ? '✕' : '⌕'}
+                      </span>
+                      {showItemDropdown && (
+                        <div style={{
+                          position: 'absolute', top: 'calc(100% + 6px)', left: 0, right: 0,
+                          zIndex: 1000, background: '#fff', border: '1px solid #e2e4ea',
+                          borderRadius: 10, boxShadow: '0 12px 28px rgba(15,23,42,0.12)',
+                          maxHeight: 240, overflowY: 'auto',
+                        }}>
+                          {filteredItemOptions.length === 0 ? (
+                            <div style={{ padding: '12px 14px', fontSize: 13, color: '#6b7280' }}>
+                              No items match
+                            </div>
+                          ) : filteredItemOptions.map(item => (
+                            <div key={`${item.itemCode || item.itemName}`}
+                              onMouseDown={e => {
+                                e.preventDefault();
+                                setItemInput(p => ({ ...p, itemName: item.itemName, itemCode: item.itemCode || p.itemCode, batchNo: '' }));
+                                setShowItemDropdown(false);
+                              }}
+                              style={{ padding: '10px 14px', cursor: 'pointer', borderBottom: '1px solid #f1f3f7' }}
+                            >
+                              <div style={{ fontSize: 13.5, fontWeight: 600, color: '#111827' }}>{item.itemName}</div>
+                              <div style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }}>{item.itemCode || '—'}</div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   ) : (
                     <input className="ihm-input" placeholder="e.g. Jaw Carrier 02"
                       value={itemInput.itemName} onChange={e => setItemInput(p => ({ ...p, itemName: e.target.value }))} />
@@ -870,11 +935,32 @@ const InHouseIssueModule: React.FC = () => {
 
         {/* ── Issues table ──────────────────────────────────────────── */}
         <div className="ihm-card">
-          <div style={{ padding: '13px 20px', borderBottom: '1px solid #f0f1f5', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <span style={{ fontWeight: 700, fontSize: 14, color: '#1a237e' }}>Requisitions</span>
-            <span style={{ fontSize: 12, color: '#9ca3af' }}>
-              {activeFilters > 0 ? `Filtered: ${filtered.length} of ${flatRows.length}` : `${flatRows.length} total rows`}
-            </span>
+          <div style={{ padding: '13px 20px', borderBottom: '1px solid #f0f1f5', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 220 }}>
+              <span style={{ fontWeight: 700, fontSize: 14, color: '#1a237e' }}>Requisitions</span>
+              <span style={{ fontSize: 12, color: '#9ca3af' }}>
+                {activeFilters > 0 ? `Filtered: ${filtered.length} of ${flatRows.length}` : `${flatRows.length} total rows`}
+              </span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: '1 1 320px', minWidth: 280 }}>
+              <div style={{ position: 'relative', flex: '1 1 auto', minWidth: 220 }}>
+                <input className="ihm-input" style={{ width: '100%', paddingRight: 30 }}
+                  placeholder="Search requisitions, item, PO, batch…"
+                  value={fSearch}
+                  onChange={e => setFSearch(e.target.value)} />
+                <span style={{
+                  position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)',
+                  color: '#6b7280', fontSize: 12, cursor: fSearch ? 'pointer' : 'default',
+                  userSelect: 'none',
+                }} onMouseDown={e => { if (fSearch) { e.preventDefault(); setFSearch(''); } }}>
+                  {fSearch ? '✕' : '🔍'}
+                </span>
+              </div>
+              <button className={`ihm-btn ihm-btn-sm ${filterOpen ? 'ihm-btn-indigo' : 'ihm-btn-ghost'}`}
+                onClick={() => setFilterOpen(p => !p)}>
+                {filterOpen ? 'Hide filters' : 'Show filters'}
+              </button>
+            </div>
           </div>
           <div style={{ overflowX: 'auto' }}>
             <table className="ihm-table">

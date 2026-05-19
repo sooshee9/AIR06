@@ -269,6 +269,12 @@ const VendorIssueModule: React.FC = () => {
   const [itemInput, setItemInput] = useState<VendorIssueItem>({ ...BLANK_ITEM });
   const [editIssueIdx, setEditIssueIdx] = useState<number | null>(null);
   const [editItemIdx, setEditItemIdx] = useState<number | null>(null);
+  const [showItemDropdown, setShowItemDropdown] = useState(false);
+  const itemSuggestions = useMemo(() => {
+    const query = itemInput.itemName.trim().toLowerCase();
+    if (!query) return itemNames.slice(0, 12);
+    return itemNames.filter(name => name.toLowerCase().includes(query)).slice(0, 12);
+  }, [itemInput.itemName, itemNames]);
 
   // Filter state
   const [filterOpen, setFilterOpen] = useState(false);
@@ -570,7 +576,20 @@ const VendorIssueModule: React.FC = () => {
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8 }}>
-            <div className="vim-toolbar">
+            <div className="vim-toolbar" style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 12, justifyContent: 'flex-end' }}>
+              <div style={{ position: 'relative', minWidth: 240, flex: '1 1 280px', maxWidth: 420 }}>
+                <input className="vim-input" style={{ width: '100%', paddingRight: 30 }}
+                  placeholder="Search requisitions, item, PO, batch…"
+                  value={fSearch}
+                  onChange={e => setFSearch(e.target.value)} />
+                <span style={{
+                  position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)',
+                  color: '#6b7280', fontSize: 12, cursor: fSearch ? 'pointer' : 'default', userSelect: 'none',
+                }} onMouseDown={e => { if (fSearch) { e.preventDefault(); setFSearch(''); } }}>
+                  {fSearch ? '✕' : '🔍'}
+                </span>
+              </div>
+
               <button
                 className={`vim-btn vim-btn-sm ${activeFilters > 0 ? 'vim-btn-indigo' : 'vim-btn-ghost'}`}
                 style={{ position: 'relative' }}
@@ -723,27 +742,45 @@ const VendorIssueModule: React.FC = () => {
 
               <div style={{ display: 'grid', gridTemplateColumns: '2.5fr 1fr 1fr', gap: 12, marginBottom: 12 }}>
                 <Field label="Item Name">
-                  {itemNames.length > 0 ? (
-                    <select className="vim-input vim-select" value={itemInput.itemName}
+                {itemNames.length > 0 ? (
+                  <div style={{ position: 'relative' }}>
+                    <input className="vim-input" placeholder="Search item name…"
+                      value={itemInput.itemName}
                       onChange={e => {
                         const v = e.target.value;
-                        const found = itemMaster.find(it => it.itemName === v);
-                        const dept = getDeptOrder(newIssue.materialPurchasePoNo);
-                        let qty = 0;
-                        if (dept?.items && found) {
-                          const di = dept.items.find((d: any) => d.itemName === v && d.itemCode === found.itemCode);
-                          if (di && typeof di.plannedQty === 'number') qty = di.plannedQty;
-                        }
-                        setItemInput(p => ({ ...p, itemName: v, itemCode: found?.itemCode || '', qty }));
-                      }}>
-                      <option value="">— Select Item —</option>
-                      {itemNames.map(n => <option key={n} value={n}>{n}</option>)}
-                    </select>
-                  ) : (
-                    <input className="vim-input" placeholder="e.g. Jaw Carrier 02"
-                      value={itemInput.itemName} onChange={e => setItemInput(p => ({ ...p, itemName: e.target.value }))} />
-                  )}
-                </Field>
+                        setItemInput(p => ({ ...p, itemName: v, itemCode: '' }));
+                        setShowItemDropdown(true);
+                      }}
+                      onFocus={() => setShowItemDropdown(true)}
+                      onBlur={() => setTimeout(() => setShowItemDropdown(false), 160)}
+                    />
+                    {showItemDropdown && itemSuggestions.length > 0 && (
+                      <div style={{ position: 'absolute', top: 'calc(100% + 8px)', left: 0, right: 0, background: '#fff', border: '1px solid #e2e4ea', borderRadius: 10, boxShadow: '0 10px 24px rgba(15,23,42,0.08)', zIndex: 50, maxHeight: 240, overflowY: 'auto' }}>
+                        {itemSuggestions.map((name, idx) => (
+                          <div key={`${name}-${idx}`} style={{ padding: '10px 12px', cursor: 'pointer', borderBottom: idx < itemSuggestions.length - 1 ? '1px solid #eef2f6' : 'none' }}
+                            onMouseDown={e => {
+                              e.preventDefault();
+                              const found = itemMaster.find(it => it.itemName === name);
+                              const dept = getDeptOrder(newIssue.materialPurchasePoNo);
+                              let qty = 0;
+                              if (dept?.items && found) {
+                                const di = dept.items.find((d: any) => d.itemName === name && d.itemCode === found.itemCode);
+                                if (di && typeof di.plannedQty === 'number') qty = di.plannedQty;
+                              }
+                              setItemInput(p => ({ ...p, itemName: name, itemCode: found?.itemCode || '', qty }));
+                              setShowItemDropdown(false);
+                            }}>
+                            {name}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <input className="vim-input" placeholder="e.g. Jaw Carrier 02"
+                    value={itemInput.itemName} onChange={e => setItemInput(p => ({ ...p, itemName: e.target.value }))} />
+                )}
+              </Field>
                 <Field label="Item Code">
                   <input className="vim-input" placeholder="e.g. JW-02" readOnly={itemNames.length > 0}
                     value={itemInput.itemCode} onChange={e => setItemInput(p => ({ ...p, itemCode: e.target.value }))} />
@@ -835,11 +872,23 @@ const VendorIssueModule: React.FC = () => {
 
         {/* ── Issues table ──────────────────────────────────────────── */}
         <div className="vim-card">
-          <div style={{ padding: '13px 20px', borderBottom: '1px solid #f0f1f5', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ padding: '13px 20px', borderBottom: '1px solid #f0f1f5', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
             <span style={{ fontWeight: 700, fontSize: 14, color: '#1a237e' }}>Issues</span>
-            <span style={{ fontSize: 12, color: '#9ca3af' }}>
-              {activeFilters > 0 ? `Filtered: ${filtered.length} of ${flatRows.length}` : `${flatRows.length} total rows`}
-            </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div style={{ position: 'relative', minWidth: 240, maxWidth: 420 }}>
+                <input className="vim-input" style={{ width: '100%', paddingRight: 30, borderRadius: 20 }}
+                  placeholder="Search by name, code, batch..."
+                  value={fSearch}
+                  onChange={e => setFSearch(e.target.value)} />
+                <span style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', color: '#6b7280', fontSize: 12, cursor: fSearch ? 'pointer' : 'default', userSelect: 'none' }}
+                  onMouseDown={e => { if (fSearch) { e.preventDefault(); setFSearch(''); } }}>
+                  {fSearch ? '✕' : '🔍'}
+                </span>
+              </div>
+              <span style={{ fontSize: 12, color: '#9ca3af', whiteSpace: 'nowrap' }}>
+                {activeFilters > 0 ? `Filtered: ${filtered.length} of ${flatRows.length}` : `${flatRows.length} total rows`}
+              </span>
+            </div>
           </div>
           <div style={{ overflowX: 'auto' }}>
             <table className="vim-table">
